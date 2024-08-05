@@ -16,24 +16,24 @@ export default function SideMenu() {
   }
 
 	return (
-		<div data-closed={closed} className="group data-[closed=false]:w-64 data-[closed=true]:w-20  h-[85vh] justify-center  bg-white rounded-2xl p-6 transition-all flex-col">
-			<div className="text-gray-600 text-sm w-full flex gap-1 items-center">
+		<div data-closed={closed} className="group data-[closed=false]:w-64 data-[closed=true]:w-20  h-full justify-center  bg-white rounded-2xl p-6 transition-all flex-col">
+			<div className="text-gray-600 text-sm w-full flex gap-1 items-center justify-between">
 				<h1 className="whitespace-nowrap group-data-[closed=false]:block group-data-[closed=true]:hidden"><span className="font-bold">CLIENT</span> DASHBOARD</h1>
-				<ChevronLeftIcon onClick={toggleMenu} className="size-5 ring-[1px] rounded-full inline data-[closed=false]:ml-auto data-[closed=true]:ml-0 ring-gray-500  text-gray-500" />
+				<ChevronLeftIcon onClick={toggleMenu} className="size-5 ring-[1px] rounded-full group-data-[closed=true]: transition-all ring-gray-500  text-gray-500" />
 			</div>
 			<div className="flex flex-col gap-4 w-full pt-6">
 				<NavLink
 					to="/map"
 					className="flex items-center gap-2 text-sgblack font-bold"
 				>
-					<HomeIcon className="size-5" />
+					<HomeIcon className="size-6 min-w-6" />
 					<h1 className="group-data-[closed=false]:block group-data-[closed=true]:hidden">Map</h1>
 				</NavLink>
 				<NavLink
 					to="/compare"
 					className="flex items-center gap-2 text-sgblack font-bold"
 				>
-					<ArchiveBoxIcon className="size-5" />
+					<ArchiveBoxIcon className="size-6 min-w-6" />
 					<h1 className="group-data-[closed=false]:block group-data-[closed=true]:hidden">Compare</h1>
 				</NavLink>
 			</div>

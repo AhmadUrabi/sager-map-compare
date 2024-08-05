@@ -1,12 +1,12 @@
-import { BellIcon } from "@heroicons/react/24/outline";
-import { SunIcon } from "@heroicons/react/24/outline";
+// import { BellIcon } from "@heroicons/react/24/outline";
+// import { SunIcon } from "@heroicons/react/24/outline";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { NavLink } from "react-router-dom";
 
 export default function TopBar() {
 	return (
 		<div className="w-screen h-16 bg-white shadow-sm border-b-sgblack/20 border-b flex justify-between items-center px-12">
-			<img src="/sager_logo_black.png" className="h-full" />
+			<img src="/sager_logo_black.png" alt="sager_logo" className="h-full" />
 			<div className="my-2 md:w-96 w-min rounded-md ring-[1px] ring-gray-400 p-2 flex gap-2 items-center">
 				<MagnifyingGlassIcon className="h-6 w-6 text-gray-500" />
 				<h1 className="text-gray-500">Search</h1>
