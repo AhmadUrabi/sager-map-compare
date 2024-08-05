@@ -1,16 +1,16 @@
 {
-  "files": {
-    "ignore": ["node_modules/**"]
-  },
-  "linter": {
-    "rules": {
-      "a11y": {
-        "useAltText": "off",
-        "noSvgWithoutTitle": "off",
-        "useButtonType": "off",
-        "useKeyWithClickEvents": "off"
-      },
-      "suspicious": { "noExplicitAny": "off" }
+    "files": {
+        "ignore": ["node_modules/**"]
+    },
+    "linter": {
+        "rules": {
+            "a11y": {
+                "useAltText": "off",
+                "noSvgWithoutTitle": "off",
+                "useButtonType": "off",
+                "useKeyWithClickEvents": "off"
+            },
+            "suspicious": { "noExplicitAny": "off" }
+        }
     }
-  }
 }

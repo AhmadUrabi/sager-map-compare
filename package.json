@@ -12,6 +12,7 @@
   "dependencies": {
     "@heroicons/react": "^2.1.5",
     "@mapbox/mapbox-gl-draw": "^1.4.3",
+    "@turf/turf": "^7.0.0",
     "@types/mapbox-gl": "^3.4.0",
     "autoprefixer": "^10.4.20",
     "mapbox-gl": "^3.5.2",

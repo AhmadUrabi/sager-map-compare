@@ -6,6 +6,7 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import Dashboard from "./components/dashboard";
 import ComparePage from "./pages/comparePage";
 import MapPage from "./pages/mapPage";
+import React from "react";
 
 const router = createBrowserRouter([
 	{
@@ -18,9 +19,7 @@ const router = createBrowserRouter([
 			},
 			{
 				path: "/compare",
-				element: (
-					<ComparePage />
-				),
+				element: <ComparePage />,
 			},
 		],
 	},
@@ -28,5 +27,7 @@ const router = createBrowserRouter([
 
 // biome-ignore lint/style/noNonNullAssertion: <explanation>
 ReactDOM.createRoot(document.getElementById("root")!).render(
-	<RouterProvider router={router} />,
+	<React.StrictMode>
+		<RouterProvider router={router} />
+	</React.StrictMode>,
 );
