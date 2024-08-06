@@ -1,5 +1,7 @@
-import { area, centroid } from "@turf/turf";
-import type { FeatureCollection } from "geojson";
+import { area, centroid, length } from "@turf/turf";
+import MapboxDraw from "@mapbox/mapbox-gl-draw";
+import type { Feature, GeoJSON } from "geojson";
+import type { FeatureCollection, Point } from "geojson";
 import type { GeoJSONFeature } from "mapbox-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -13,21 +15,46 @@ import {
 import { MAPBOX_TOKEN } from "../../constants";
 import DrawControl from "../drawControls";
 
+// TODO: need to get source name from mapbox draw
+// and create a layer for text fields
+
 const layerStyle: LayerProps = {
 	id: "poi-labels",
 	type: "symbol",
-	source: "places",
+	source: "mapbox-gl-draw-hot",
 	layout: {
 		"text-field": ["get", "description"],
 		"text-variable-anchor": ["top", "bottom", "left", "right"],
 		"text-justify": "auto",
-		"text-size": 14,
+		"text-size": 16,
 		"icon-image": ["get", "icon"],
 	},
 	paint: {
 		"text-color": "#fff",
 		"text-halo-color": "#000",
-		"text-halo-width": 0.5,
+		"text-halo-width": 1,
+	},
+};
+
+const layerLengthStyle: LayerProps = {
+	id: "length-labels",
+	type: "symbol",
+	source: "mapbox-gl-draw-hot", // Will be ignored
+	layout: {
+		"text-field": ["get", "length"],
+		"text-variable-anchor": ["top", "bottom", "left", "right"],
+		"text-justify": "auto",
+		"text-size": 16,
+		"text-ignore-placement": true,
+		"text-allow-overlap": true,
+		"text-offset": [0, 0.5],
+		visibility: "visible",
+	},
+	paint: {
+		"text-color": "#000",
+		"text-halo-color": "#000",
+		"text-halo-width": 0,
+		"text-opacity-transition": { duration: 0 },
 	},
 };
 
@@ -50,7 +77,6 @@ interface FeatureData {
 		};
 		geometry: {
 			type: string;
-			// coordinates: [center[0], center[1]],
 			coordinates: [number, number];
 		};
 	};
@@ -78,8 +104,11 @@ export default function NormalMap() {
 		features: [],
 	});
 
+	const [lengthSource, setLengthSource] = useState<Feature>();
+
 	// Update the center of the polygon on move
 	const onUpdate = (e: any) => {
+		console.log(e);
 		const newCenter = centroid(e.features[0].geometry).geometry.coordinates;
 		const id = e.features[0].id;
 		const newData = { ...featureDataRef.current };
@@ -97,6 +126,13 @@ export default function NormalMap() {
 
 	// Calculate the area and center on create, and append them to featureData
 	const onCreate = (e: any) => {
+		if (e.features[0].geometry.type === "LineString") return;
+		// switch (e.features[0].geometry.type) {
+		// 	case "LineString":
+		// 		console.log("LineString");
+		// 		break;
+
+		// 	case "Feature": {
 		const { area, center } = calculateArea(e.features[0]);
 
 		const id = e.features[0].id;
@@ -117,6 +153,12 @@ export default function NormalMap() {
 		};
 
 		setFeatureData(newData);
+		// 	break;
+		// }
+		// default: {
+		// 	break;
+		// }
+		// }
 	};
 
 	// Effects to update refs for each state object, to use inside closures with the latest value
@@ -169,7 +211,6 @@ export default function NormalMap() {
 	const onMouseMoveHandle = useCallback(
 		(e: MapMouseEvent) => {
 			if (!areaOnHoverRef.current) return;
-
 			// @ts-ignore - featureTarget is not in the types
 			const el = e.featureTarget;
 			if (el) {
@@ -178,9 +219,10 @@ export default function NormalMap() {
 				setCurrentHover(true);
 
 				// Fetch the matching feature from the featureData
+				// console.log(el.properties.id, featureDataRef.current);
 				const feature = featureDataRef.current[el.properties.id];
 				if (!feature) return;
-
+				// console.log("ss");
 				setGeoJson({
 					type: "FeatureCollection",
 					// TODO: check type
@@ -206,8 +248,13 @@ export default function NormalMap() {
 	useEffect(() => {
 		if (mapRef.current && mapReady) {
 			mapRef.current.on("mousemove", onMouseMoveHandle);
+			// mapRef.current.on("mousedown", (e) => {
+			// 	console.log(e.featureTarget);
+			// });
 		}
 	}, [mapReady, onMouseMoveHandle]);
+
+	const calculateLegthTimout = useRef<NodeJS.Timeout | null>(null);
 
 	return (
 		<>
@@ -216,6 +263,7 @@ export default function NormalMap() {
 			</button>
 			<GeoMap
 				ref={mapRef}
+				fadeDuration={0}
 				mapboxAccessToken={MAPBOX_TOKEN}
 				initialViewState={{
 					longitude: 35.9106,
@@ -235,8 +283,56 @@ export default function NormalMap() {
 					controls={{
 						polygon: true,
 						trash: true,
+						line_string: true,
 					}}
-					defaultMode="draw_polygon"
+					modes={{
+						...MapboxDraw.modes,
+						draw_line_string: {
+							...MapboxDraw.modes.draw_line_string,
+
+							toDisplayFeatures: (
+								state: any,
+								geojson: any,
+								display: (geojson: GeoJSON) => void,
+							) => {
+								if (geojson.geometry.coordinates.length === 1) return;
+
+								const isActiveLine = geojson.properties.id === state.line.id;
+
+								if (!isActiveLine) {
+									setLengthSource(undefined);
+								}
+
+								geojson.properties.active = isActiveLine ? "true" : "false";
+								if (isActiveLine && !calculateLegthTimout.current) {
+									console.log(length(geojson, { units: "meters" }));
+									const coords =
+										geojson.geometry.coordinates[
+											geojson.geometry.coordinates.length - 1
+										];
+									setLengthSource({
+										id: "length-source",
+										type: "Feature",
+										geometry: {
+											type: "Point",
+											coordinates: [coords[0], coords[1]],
+										},
+										properties: {
+											length: length(geojson, {
+												units: "meters",
+											}).toFixed(2),
+										},
+									});
+									console.log(geojson, state);
+									calculateLegthTimout.current = setTimeout(() => {
+										calculateLegthTimout.current = null;
+									}, 50);
+								}
+								return display(geojson);
+							},
+						},
+					}}
+					defaultMode="draw_line_string"
 					userProperties={true}
 					onCreate={onCreate}
 					onUpdate={onUpdate}
@@ -244,6 +340,9 @@ export default function NormalMap() {
 				/>
 				<Source id="my-data" type="geojson" data={geojson}>
 					<Layer {...layerStyle} />
+				</Source>
+				<Source id="lengthSource" type="geojson" data={lengthSource}>
+					<Layer {...layerLengthStyle} />
 				</Source>
 			</GeoMap>
 		</>
