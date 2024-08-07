@@ -1,86 +1,27 @@
-import { area, centroid, length } from "@turf/turf";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import type { Feature, GeoJSON } from "geojson";
 import type { FeatureCollection } from "geojson";
-import type { GeoJSONFeature } from "mapbox-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	Map as GeoMap,
 	Layer,
-	type LayerProps,
 	type MapMouseEvent,
 	type MapRef,
 	Source,
 } from "react-map-gl";
-import { MAPBOX_TOKEN } from "../../constants";
-import DrawControl from "../drawControls";
+import {
+	initialViewState,
+	layerLengthStyle,
+	layerStyle,
+	MAPBOX_TOKEN,
+} from "../../constants";
+import DrawControl, { drawRef } from "../drawControls";
 
-// TODO: need to get source name from mapbox draw
-// and create a layer for text fields
-
-const layerStyle: LayerProps = {
-	id: "poi-labels",
-	type: "symbol",
-	source: "mapbox-gl-draw-hot",
-	layout: {
-		"text-field": ["get", "description"],
-		"text-variable-anchor": ["top", "bottom", "left", "right"],
-		"text-justify": "auto",
-		"text-size": 16,
-		"icon-image": ["get", "icon"],
-	},
-	paint: {
-		"text-color": "#fff",
-		"text-halo-color": "#000",
-		"text-halo-width": 1,
-	},
-};
-
-const layerLengthStyle: LayerProps = {
-	id: "length-labels",
-	type: "symbol",
-	source: "mapbox-gl-draw-hot", // Will be ignored
-	layout: {
-		"text-field": ["get", "length"],
-		"text-variable-anchor": ["top", "bottom", "left", "right"],
-		"text-justify": "auto",
-		"text-size": 16,
-		// "text-ignore-placement": true,
-		// "text-allow-overlap": true,
-		"text-offset": [0, 0.5],
-		// visibility: ["get", "visible"],
-	},
-	paint: {
-		"text-color": "#000",
-		"text-halo-color": "#000",
-		"text-halo-width": 0,
-		// "text-opacity-transition": { duration: 0 },
-	},
-};
-
-// Helper function to calculate the area and center of a feature
-const calculateArea = (feature: GeoJSONFeature) => {
-	const centerCoors = centroid(feature.geometry).geometry.coordinates;
-	const featureArea = area(feature.geometry);
-	return {
-		area: featureArea,
-		center: centerCoors,
-	};
-};
-
-interface FeatureData {
-	[id: string]: {
-		type: string;
-		id: string;
-		properties: {
-			description: string;
-		};
-		geometry: {
-			type: string;
-			coordinates: [number, number];
-		};
-	};
-}
+import MapControls from "../ui/mapControls";
+import getDrawModes from "../../util/drawModes/getDrawModes";
+import { getDisplayFeatures } from "../../util/drawModes/drawLineString";
+import type FeatureData from "../../util/interfaces/featureData";
+import { calculateAreaAndCenter } from "../../util/calculateAreaAndCenter";
 
 export default function NormalMap() {
 	// featureData contains the data of all of the features, with the key being the feature id
@@ -95,9 +36,6 @@ export default function NormalMap() {
 	// currentHover checks if the mouse is currently hovering over a feature, to prevent setting the geojson on every mouse move event
 	const [currentHover, setCurrentHover] = useState(false);
 
-	// mapReady is a flag to check if the ref is ready
-	const [mapReady, setMapReady] = useState(false);
-
 	// geojson contains the feature(s) that are currently rendered on map
 	const [geojson, setGeoJson] = useState<FeatureCollection>({
 		type: "FeatureCollection",
@@ -106,10 +44,23 @@ export default function NormalMap() {
 
 	const [lengthSource, setLengthSource] = useState<Feature | null>(null);
 	const [lengthVisible, setLengthVisible] = useState(false);
+
 	const calculateLengthTimeout = useRef<NodeJS.Timeout | null>(null);
 
+	// The main map reference
+	const mapRef = useRef<MapRef | null>(null);
+
+	// Effects to update refs for each state object, to use inside closures with the latest value
+	useEffect(() => {
+		featureDataRef.current = featureData;
+	}, [featureData]);
+
+	useEffect(() => {
+		areaOnHoverRef.current = areaOnHover;
+	}, [areaOnHover]);
+
 	const modes = {
-		...MapboxDraw.modes,
+		...getDrawModes(),
 		draw_line_string: {
 			...MapboxDraw.modes.draw_line_string,
 
@@ -117,57 +68,25 @@ export default function NormalMap() {
 				state: any,
 				geojson: any,
 				display: (geojson: GeoJSON) => void,
-			) => {
-				// Return if we didn't add any points
-				if (geojson.geometry.coordinates.length === 1) return;
-
-				// Check if the line is currently active
-				const isActiveLine = geojson.properties.id === state.line.id;
-				geojson.properties.active = isActiveLine ? "true" : "false";
-
-				// Reset Timeout for calculating length
-				if (calculateLengthTimeout.current) {
-					clearTimeout(calculateLengthTimeout.current);
-					calculateLengthTimeout.current = null;
-					setLengthVisible(false);
-				}
-
-				if (isActiveLine && !calculateLengthTimeout.current) {
-					calculateLengthTimeout.current = setTimeout(() => {
-						console.log("Calculating Length");
-						setLengthVisible(true);
-						const coords =
-							geojson.geometry.coordinates[
-								geojson.geometry.coordinates.length - 1
-							];
-						setLengthSource({
-							id: "length-source",
-							type: "Feature",
-							geometry: {
-								type: "Point",
-								coordinates: [coords[0], coords[1]],
-							},
-							properties: {
-								length: length(geojson, {
-									units: "meters",
-								}).toFixed(2),
-							},
-						});
-						calculateLengthTimeout.current = null;
-					}, 50);
-				}
-				return display(geojson);
-			},
+			) =>
+				getDisplayFeatures(
+					state,
+					geojson,
+					display,
+					calculateLengthTimeout,
+					setLengthSource,
+					setLengthVisible,
+				),
 		},
 	};
 
 	// Update the center of the polygon on move
 	const onUpdate = (e: any) => {
-		console.log(e);
-		const newCenter = centroid(e.features[0].geometry).geometry.coordinates;
+		const { area, center } = calculateAreaAndCenter(e.features[0]);
 		const id = e.features[0].id;
 		const newData = { ...featureDataRef.current };
-		newData[id].geometry.coordinates = [newCenter[0], newCenter[1]];
+		newData[id].geometry.coordinates = [center[0], center[1]];
+		newData[id].properties.description = `Area: ${area.toFixed(2)} m²`;
 		setFeatureData(newData);
 	};
 
@@ -182,7 +101,7 @@ export default function NormalMap() {
 	// Calculate the area and center on create, and append them to featureData
 	const onCreate = (e: any) => {
 		if (e.features[0].geometry.type === "LineString") return;
-		const { area, center } = calculateArea(e.features[0]);
+		const { area, center } = calculateAreaAndCenter(e.features[0]);
 
 		const id = e.features[0].id;
 
@@ -208,36 +127,31 @@ export default function NormalMap() {
 	const toggleAreaOnHover = () => {
 		switch (areaOnHover) {
 			case true: {
-				if (mapReady && mapRef.current) {
+				if (mapRef.current) {
 					console.log("Removing event listener");
 					mapRef.current.off("mousemove", onMouseMoveHandle);
 				}
-
-				setAreaOnHover(false);
 				const featuresArray = Object.keys(featureDataRef.current).map((key) => {
 					return featureDataRef.current[key];
 				});
-
 				setGeoJson({
 					type: "FeatureCollection",
-					// @ts-ignore
-					features: featuresArray,
+					features: featuresArray as Feature[],
 				});
 				break;
 			}
 			case false:
-				if (mapReady && mapRef.current) {
+				if (mapRef.current) {
 					console.log("Adding event listener");
 					mapRef.current.on("mousemove", onMouseMoveHandle);
 				}
-
-				setAreaOnHover(true);
 				setGeoJson({
 					type: "FeatureCollection",
 					features: [],
 				});
 				break;
 		}
+		setAreaOnHover(!areaOnHover);
 	};
 
 	// Main event handler for mouse move events
@@ -253,19 +167,14 @@ export default function NormalMap() {
 				setCurrentHover(true);
 
 				// Fetch the matching feature from the featureData
-				// console.log(el.properties.id, featureDataRef.current);
 				const feature = featureDataRef.current[el.properties.id];
 				if (!feature) return;
-				// console.log("ss");
 				setGeoJson({
 					type: "FeatureCollection",
-					// TODO: check type
-					features: [feature as any],
+					features: [feature as Feature],
 				});
 			} else {
-				// Clear Hover Flag
 				setCurrentHover(false);
-				// return if the geojson is already empty
 				if (geojson.features.length === 0) return;
 				setGeoJson({
 					type: "FeatureCollection",
@@ -276,70 +185,53 @@ export default function NormalMap() {
 		[currentHover, geojson.features.length],
 	);
 
-	// The main map reference
-	const mapRef = useRef<MapRef | null>(null);
-
-	// Only mount event handlers when the map is ready
-	useEffect(() => {
-		if (mapRef.current && mapReady) {
+	const mapLoadHandler = useCallback(() => {
+		if (mapRef.current) {
 			mapRef.current.on("mousemove", onMouseMoveHandle);
 		}
-	}, [mapReady, onMouseMoveHandle]);
-
-	// Effects to update refs for each state object, to use inside closures with the latest value
-	useEffect(() => {
-		featureDataRef.current = featureData;
-	}, [featureData]);
-
-	useEffect(() => {
-		areaOnHoverRef.current = areaOnHover;
-	}, [areaOnHover]);
+	}, [onMouseMoveHandle]);
 
 	return (
-		<>
-			<button className="absolute bottom-12 left-2" onClick={toggleAreaOnHover}>
-				Area on Hover: {areaOnHover ? "On" : "Off"}
-			</button>
-			<GeoMap
-				ref={mapRef}
-				fadeDuration={150}
-				mapboxAccessToken={MAPBOX_TOKEN}
-				initialViewState={{
-					longitude: 35.9106,
-					latitude: 31.9544,
-					zoom: 12,
-				}}
-				onLoad={() => {
-					// raise map ready flag, calls effect again
-					setMapReady(true);
-				}}
-				style={{ height: "100%" }}
-				mapStyle="mapbox://styles/mapbox/streets-v9"
-			>
-				<DrawControl
-					position="top-left"
-					displayControlsDefault={false}
-					controls={{
-						polygon: true,
-						trash: true,
-						line_string: true,
-					}}
-					modes={modes}
-					defaultMode="draw_line_string"
-					userProperties={true}
-					onCreate={onCreate}
-					onUpdate={onUpdate}
-					onDelete={onDelete}
-				/>
-				<Source id="my-data" type="geojson" data={geojson}>
-					<Layer {...layerStyle} />
-				</Source>
-				{lengthVisible && (
-					<Source id="lengthSource" type="geojson" data={lengthSource}>
-						<Layer {...layerLengthStyle} />
-					</Source>
-				)}
-			</GeoMap>
-		</>
+		<GeoMap
+			ref={mapRef}
+			fadeDuration={150}
+			mapboxAccessToken={MAPBOX_TOKEN}
+			initialViewState={initialViewState}
+			onLoad={mapLoadHandler}
+			style={{ height: "100%", position: "relative" }}
+			mapStyle="mapbox://styles/mapbox/streets-v9"
+		>
+			<DrawControl
+				position="top-left"
+				displayControlsDefault={false}
+				modes={modes}
+				defaultMode="simple_select"
+				userProperties={true}
+				onCreate={onCreate}
+				onUpdate={onUpdate}
+				onDelete={onDelete}
+			/>
+			<MapControls drawRef={drawRef} setAreaOnHover={toggleAreaOnHover} />
+			<GeoJSONSource geojson={geojson} />
+			{lengthVisible && <LengthSource lengthSource={lengthSource} />}
+		</GeoMap>
+	);
+}
+
+export function GeoJSONSource({ geojson }: { geojson: FeatureCollection }) {
+	return (
+		<Source id="my-data" type="geojson" data={geojson}>
+			<Layer {...layerStyle} />
+		</Source>
+	);
+}
+
+export function LengthSource({
+	lengthSource,
+}: { lengthSource: Feature | null }) {
+	return (
+		<Source id="lengthSource" type="geojson" data={lengthSource}>
+			<Layer {...layerLengthStyle} />
+		</Source>
 	);
 }
