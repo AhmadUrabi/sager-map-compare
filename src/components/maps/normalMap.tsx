@@ -1,7 +1,7 @@
 import { area, centroid, length } from "@turf/turf";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import type { Feature, GeoJSON } from "geojson";
-import type { FeatureCollection, Point } from "geojson";
+import type { FeatureCollection } from "geojson";
 import type { GeoJSONFeature } from "mapbox-gl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -45,16 +45,16 @@ const layerLengthStyle: LayerProps = {
 		"text-variable-anchor": ["top", "bottom", "left", "right"],
 		"text-justify": "auto",
 		"text-size": 16,
-		"text-ignore-placement": true,
-		"text-allow-overlap": true,
+		// "text-ignore-placement": true,
+		// "text-allow-overlap": true,
 		"text-offset": [0, 0.5],
-		visibility: "visible",
+		// visibility: ["get", "visible"],
 	},
 	paint: {
 		"text-color": "#000",
 		"text-halo-color": "#000",
 		"text-halo-width": 0,
-		"text-opacity-transition": { duration: 0 },
+		// "text-opacity-transition": { duration: 0 },
 	},
 };
 
@@ -104,7 +104,62 @@ export default function NormalMap() {
 		features: [],
 	});
 
-	const [lengthSource, setLengthSource] = useState<Feature>();
+	const [lengthSource, setLengthSource] = useState<Feature | null>(null);
+	const [lengthVisible, setLengthVisible] = useState(false);
+	const calculateLengthTimeout = useRef<NodeJS.Timeout | null>(null);
+
+	const modes = {
+		...MapboxDraw.modes,
+		draw_line_string: {
+			...MapboxDraw.modes.draw_line_string,
+
+			toDisplayFeatures: (
+				state: any,
+				geojson: any,
+				display: (geojson: GeoJSON) => void,
+			) => {
+				// Return if we didn't add any points
+				if (geojson.geometry.coordinates.length === 1) return;
+
+				// Check if the line is currently active
+				const isActiveLine = geojson.properties.id === state.line.id;
+				geojson.properties.active = isActiveLine ? "true" : "false";
+
+				// Reset Timeout for calculating length
+				if (calculateLengthTimeout.current) {
+					clearTimeout(calculateLengthTimeout.current);
+					calculateLengthTimeout.current = null;
+					setLengthVisible(false);
+				}
+
+				if (isActiveLine && !calculateLengthTimeout.current) {
+					calculateLengthTimeout.current = setTimeout(() => {
+						console.log("Calculating Length");
+						setLengthVisible(true);
+						const coords =
+							geojson.geometry.coordinates[
+								geojson.geometry.coordinates.length - 1
+							];
+						setLengthSource({
+							id: "length-source",
+							type: "Feature",
+							geometry: {
+								type: "Point",
+								coordinates: [coords[0], coords[1]],
+							},
+							properties: {
+								length: length(geojson, {
+									units: "meters",
+								}).toFixed(2),
+							},
+						});
+						calculateLengthTimeout.current = null;
+					}, 50);
+				}
+				return display(geojson);
+			},
+		},
+	};
 
 	// Update the center of the polygon on move
 	const onUpdate = (e: any) => {
@@ -127,12 +182,6 @@ export default function NormalMap() {
 	// Calculate the area and center on create, and append them to featureData
 	const onCreate = (e: any) => {
 		if (e.features[0].geometry.type === "LineString") return;
-		// switch (e.features[0].geometry.type) {
-		// 	case "LineString":
-		// 		console.log("LineString");
-		// 		break;
-
-		// 	case "Feature": {
 		const { area, center } = calculateArea(e.features[0]);
 
 		const id = e.features[0].id;
@@ -153,22 +202,7 @@ export default function NormalMap() {
 		};
 
 		setFeatureData(newData);
-		// 	break;
-		// }
-		// default: {
-		// 	break;
-		// }
-		// }
 	};
-
-	// Effects to update refs for each state object, to use inside closures with the latest value
-	useEffect(() => {
-		featureDataRef.current = featureData;
-	}, [featureData]);
-
-	useEffect(() => {
-		areaOnHoverRef.current = areaOnHover;
-	}, [areaOnHover]);
 
 	// TODO: redo this function
 	const toggleAreaOnHover = () => {
@@ -245,16 +279,21 @@ export default function NormalMap() {
 	// The main map reference
 	const mapRef = useRef<MapRef | null>(null);
 
+	// Only mount event handlers when the map is ready
 	useEffect(() => {
 		if (mapRef.current && mapReady) {
 			mapRef.current.on("mousemove", onMouseMoveHandle);
-			// mapRef.current.on("mousedown", (e) => {
-			// 	console.log(e.featureTarget);
-			// });
 		}
 	}, [mapReady, onMouseMoveHandle]);
 
-	const calculateLegthTimout = useRef<NodeJS.Timeout | null>(null);
+	// Effects to update refs for each state object, to use inside closures with the latest value
+	useEffect(() => {
+		featureDataRef.current = featureData;
+	}, [featureData]);
+
+	useEffect(() => {
+		areaOnHoverRef.current = areaOnHover;
+	}, [areaOnHover]);
 
 	return (
 		<>
@@ -263,7 +302,7 @@ export default function NormalMap() {
 			</button>
 			<GeoMap
 				ref={mapRef}
-				fadeDuration={0}
+				fadeDuration={150}
 				mapboxAccessToken={MAPBOX_TOKEN}
 				initialViewState={{
 					longitude: 35.9106,
@@ -285,53 +324,7 @@ export default function NormalMap() {
 						trash: true,
 						line_string: true,
 					}}
-					modes={{
-						...MapboxDraw.modes,
-						draw_line_string: {
-							...MapboxDraw.modes.draw_line_string,
-
-							toDisplayFeatures: (
-								state: any,
-								geojson: any,
-								display: (geojson: GeoJSON) => void,
-							) => {
-								if (geojson.geometry.coordinates.length === 1) return;
-
-								const isActiveLine = geojson.properties.id === state.line.id;
-
-								if (!isActiveLine) {
-									setLengthSource(undefined);
-								}
-
-								geojson.properties.active = isActiveLine ? "true" : "false";
-								if (isActiveLine && !calculateLegthTimout.current) {
-									console.log(length(geojson, { units: "meters" }));
-									const coords =
-										geojson.geometry.coordinates[
-											geojson.geometry.coordinates.length - 1
-										];
-									setLengthSource({
-										id: "length-source",
-										type: "Feature",
-										geometry: {
-											type: "Point",
-											coordinates: [coords[0], coords[1]],
-										},
-										properties: {
-											length: length(geojson, {
-												units: "meters",
-											}).toFixed(2),
-										},
-									});
-									console.log(geojson, state);
-									calculateLegthTimout.current = setTimeout(() => {
-										calculateLegthTimout.current = null;
-									}, 50);
-								}
-								return display(geojson);
-							},
-						},
-					}}
+					modes={modes}
 					defaultMode="draw_line_string"
 					userProperties={true}
 					onCreate={onCreate}
@@ -341,9 +334,11 @@ export default function NormalMap() {
 				<Source id="my-data" type="geojson" data={geojson}>
 					<Layer {...layerStyle} />
 				</Source>
-				<Source id="lengthSource" type="geojson" data={lengthSource}>
-					<Layer {...layerLengthStyle} />
-				</Source>
+				{lengthVisible && (
+					<Source id="lengthSource" type="geojson" data={lengthSource}>
+						<Layer {...layerLengthStyle} />
+					</Source>
+				)}
 			</GeoMap>
 		</>
 	);
