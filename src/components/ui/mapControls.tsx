@@ -6,14 +6,14 @@ import {
 	PlusIcon,
 	SunIcon,
 } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export default function MapControls({
 	drawRef,
 	setAreaOnHover,
 }: { drawRef: MapboxDraw | null; setAreaOnHover: any }) {
 	const [activeMode, setActiveMode] = useState("simple_select");
-
+	console.log(drawRef);
 	const modes = [
 		{
 			id: "draw_polygon",

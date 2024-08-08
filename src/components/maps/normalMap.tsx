@@ -86,14 +86,14 @@ export default function NormalMap() {
 		const id = e.features[0].id;
 		const newData = { ...featureDataRef.current };
 		newData[id].geometry.coordinates = [center[0], center[1]];
-		newData[id].properties.description = `Area: ${area.toFixed(2)} m²`;
+		newData[id].properties.description =
+			`Area: ${new Intl.NumberFormat().format(area)} m²`;
 		setFeatureData(newData);
 	};
 
 	const onDelete = (e: any) => {
-		const id = e.features[0].id;
 		const newData = { ...featureDataRef.current };
-		delete newData[id];
+		delete newData[e.features[0].id];
 		setFeatureData(newData);
 		// TODO: check geojson and remove the feature from it
 	};
@@ -111,7 +111,7 @@ export default function NormalMap() {
 				type: "Feature",
 				id: id,
 				properties: {
-					description: `Area: ${area.toFixed(2)} m²`,
+					description: `Area: ${new Intl.NumberFormat().format(area)} m²`,
 				},
 				geometry: {
 					type: "Point",
@@ -199,11 +199,11 @@ export default function NormalMap() {
 			initialViewState={initialViewState}
 			onLoad={mapLoadHandler}
 			style={{ height: "100%", position: "relative" }}
-			mapStyle="mapbox://styles/mapbox/streets-v9"
+			mapStyle="mapbox://styles/mapbox/light-v10"
 		>
 			<DrawControl
 				position="top-left"
-				displayControlsDefault={false}
+				displayControlsDefault={true}
 				modes={modes}
 				defaultMode="simple_select"
 				userProperties={true}

@@ -1,4 +1,5 @@
 import { area, centroid } from "@turf/turf";
+import type { GeoJSONFeature } from "mapbox-gl";
 
 export const calculateAreaAndCenter = (feature: GeoJSONFeature) => {
 	const centerCoors = centroid(feature.geometry).geometry.coordinates;
