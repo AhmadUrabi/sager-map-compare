@@ -23,7 +23,10 @@ import { getDisplayFeatures } from "../../util/drawModes/drawLineString";
 import type FeatureData from "../../util/interfaces/featureData";
 import { calculateAreaAndCenter } from "../../util/calculateAreaAndCenter";
 
+// TODO: Fix showing area when areaonhover is off
+
 export default function NormalMap() {
+	console.log("rerender");
 	// featureData contains the data of all of the features, with the key being the feature id
 	// This is to optimize search time in functions
 	const [featureData, setFeatureData] = useState<FeatureData>({});
@@ -41,6 +44,10 @@ export default function NormalMap() {
 		type: "FeatureCollection",
 		features: [],
 	});
+
+	useEffect(() => {
+		console.log(geojson);
+	}, [geojson]);
 
 	const [lengthSource, setLengthSource] = useState<Feature | null>(null);
 	const [lengthVisible, setLengthVisible] = useState(false);
@@ -63,7 +70,6 @@ export default function NormalMap() {
 		...getDrawModes(),
 		draw_line_string: {
 			...MapboxDraw.modes.draw_line_string,
-
 			toDisplayFeatures: (
 				state: any,
 				geojson: any,
@@ -121,6 +127,25 @@ export default function NormalMap() {
 		};
 
 		setFeatureData(newData);
+		// setGeoJson((old) => {
+		// 	return {
+		// 		type: "FeatureCollection",
+		// 		features: [
+		// 			...old.features,
+		// 			{
+		// 				type: "Feature",
+		// 				id: id,
+		// 				properties: {
+		// 					description: `Area: ${new Intl.NumberFormat().format(area)} m²`,
+		// 				},
+		// 				geometry: {
+		// 					type: "Point",
+		// 					coordinates: [center[0], center[1]],
+		// 				},
+		// 			},
+		// 		],
+		// 	};
+		// });
 	};
 
 	// TODO: redo this function
@@ -159,8 +184,10 @@ export default function NormalMap() {
 	const onMouseMoveHandle = useCallback(
 		(e: MapMouseEvent) => {
 			if (!areaOnHoverRef.current) return;
+
 			// @ts-ignore - featureTarget is not in the types
 			const el = e.featureTarget;
+			console.log(el);
 			if (el) {
 				// Return if the mouse is already hovering over a feature
 				if (currentHover) return;
@@ -185,36 +212,57 @@ export default function NormalMap() {
 		[currentHover, geojson.features.length],
 	);
 
+	const [mapReady, setMapReady] = useState(false);
+
 	const mapLoadHandler = useCallback(() => {
 		if (mapRef.current) {
+			setMapReady(true);
 			mapRef.current.on("mousemove", onMouseMoveHandle);
 		}
 	}, [onMouseMoveHandle]);
 
 	return (
-		<GeoMap
-			ref={mapRef}
-			fadeDuration={150}
-			mapboxAccessToken={MAPBOX_TOKEN}
-			initialViewState={initialViewState}
-			onLoad={mapLoadHandler}
-			style={{ height: "100%", position: "relative" }}
-			mapStyle="mapbox://styles/mapbox/light-v10"
-		>
-			<DrawControl
-				position="top-left"
-				displayControlsDefault={true}
-				modes={modes}
-				defaultMode="simple_select"
-				userProperties={true}
-				onCreate={onCreate}
-				onUpdate={onUpdate}
-				onDelete={onDelete}
-			/>
-			<MapControls drawRef={drawRef} setAreaOnHover={toggleAreaOnHover} />
-			<GeoJSONSource geojson={geojson} />
-			{lengthVisible && <LengthSource lengthSource={lengthSource} />}
-		</GeoMap>
+		<>
+			<div
+				className={`transition-all duration-700 absolute top-0 left-0 h-full w-full bg-sgblack/90 z-50 flex justify-center items-center ${!mapReady ? "opacity-100 visible" : "opacity-0 invisible"}`}
+			>
+				<h1 className="text-white font-bold text-3xl">Loading...</h1>
+			</div>
+			<GeoMap
+				ref={mapRef}
+				fadeDuration={150}
+				mapboxAccessToken={MAPBOX_TOKEN}
+				initialViewState={initialViewState}
+				onLoad={mapLoadHandler}
+				style={{ height: "100%", position: "relative" }}
+				mapStyle="mapbox://styles/mapbox/light-v10"
+			>
+				<DrawControl
+					position="top-left"
+					displayControlsDefault={false}
+					modes={modes}
+					defaultMode="simple_select"
+					userProperties={true}
+					onCreate={onCreate}
+					onUpdate={onUpdate}
+					onDelete={onDelete}
+				/>
+				{mapReady && (
+					<MapControls
+						drawRef={drawRef}
+						setAreaOnHover={toggleAreaOnHover}
+						areaOnHover={areaOnHover}
+					/>
+				)}
+				{/*<GeoJSONSource geojson={geojson} /> */}
+				{mapRef.current && (
+					<Source id="my-data" type="geojson" data={geojson}>
+						<Layer {...layerStyle} />
+					</Source>
+				)}
+				{lengthVisible && <LengthSource lengthSource={lengthSource} />}
+			</GeoMap>
+		</>
 	);
 }
 

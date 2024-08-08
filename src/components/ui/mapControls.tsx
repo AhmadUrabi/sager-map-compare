@@ -6,29 +6,38 @@ import {
 	PlusIcon,
 	SunIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import type { CustomDrawControl } from "../drawControls";
 
 export default function MapControls({
 	drawRef,
 	setAreaOnHover,
-}: { drawRef: MapboxDraw | null; setAreaOnHover: any }) {
+	areaOnHover,
+}: {
+	drawRef: CustomDrawControl | null;
+	setAreaOnHover: any;
+	areaOnHover: boolean;
+}) {
 	const [activeMode, setActiveMode] = useState("simple_select");
-	console.log(drawRef);
+	console.log(areaOnHover);
 	const modes = [
 		{
 			id: "draw_polygon",
 			text: "Draw Polygon",
 			icon: <PlusIcon className="size-4" />,
+			iconClass: "mapbox-gl-draw_polygon",
 		},
 		{
 			id: "draw_line_string",
 			text: "Draw Line String",
 			icon: <SlashIcon className="size-4" />,
+			iconClass: "mapbox-gl-draw_line",
 		},
 		{
 			id: "drag_circle",
 			text: "Drag Circle",
 			icon: <SunIcon className="size-4" />,
+			iconClass: "mapbox-gl-draw_polygon",
 		},
 	];
 
@@ -66,11 +75,9 @@ export default function MapControls({
 					return (
 						<button
 							key={mode.id}
-							className={`p-2 text-sm text-gray-800 hover:bg-gray-100 ${activeMode === mode.id ? "bg-gray-200" : ""}`}
+							className={`p-2 text-sm text-gray-800 hover:bg-gray-100 aspect-square bg-no-repeat bg-center ${activeMode === mode.id ? "bg-gray-200" : ""} ${mode.iconClass}`}
 							onClick={() => handleModeChange(mode.id)}
-						>
-							{mode.icon ?? mode.text}
-						</button>
+						/>
 					);
 				})}
 			</div>
@@ -79,7 +86,7 @@ export default function MapControls({
 					return (
 						<button
 							key={tool.id}
-							className="p-2 text-sm text-gray-800 hover:bg-gray-100"
+							className={`p-2 text-sm text-gray-800 hover:bg-gray-100 ${tool.id === "area_on_hover" ? (areaOnHover ? "bg-gray-200" : "") : ""}`}
 							onClick={() => changeTool(tool.id)}
 						>
 							{tool.icon ?? tool.text}

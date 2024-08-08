@@ -12,10 +12,10 @@ type DrawControlProps = ConstructorParameters<typeof MapboxDraw>[0] & {
 	onDelete?: (evt: { features: object[] }) => void;
 };
 
-export let drawRef: MapboxDraw | null = null;
+export let drawRef: CustomDrawControl | null = null;
 
 export default function DrawControl(props: DrawControlProps) {
-	drawRef = useControl<MapboxDraw>(
+	drawRef = useControl<CustomDrawControl>(
 		() => new CustomDrawControl(props),
 		({ map }: { map: MapRef }) => {
 			console.log(map);
@@ -35,25 +35,29 @@ export default function DrawControl(props: DrawControlProps) {
 
 	return null;
 }
+// function getDefaultExportFromCjs(x) {
+// 	// biome-ignore lint/complexity/useOptionalChain: <explanation>
+// 	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default")
+// 		? x.default
+// 		: x;
+// }
+// function extend() {
+// 	const arguments$1 = arguments;
 
-export class CustomDrawControl extends MapboxDraw {
-	constructor(props: DrawControlProps) {
-		console.log("test");
-		super(props);
-	}
-	onAdd(map) {
-		this.map = map;
-		this.container = document.createElement("div");
-		this.container.className = "mapboxgl-ctrl-group mapboxgl-ctrl";
-		this.button = document.createElement("button");
-		this.button.className = "mapbox-gl-draw_ctrl-draw-btn";
-		this.button.addEventListener("click", this.onClick.bind(this));
-		this.container.appendChild(this.button);
-		console.log(this.button);
-		return this.container;
-	}
+// 	let target = {};
 
-	onClick(e) {
-		// Handle button click here
-	}
-}
+// 	for (let i = 0; i < arguments.length; i++) {
+// 		let source = arguments$1[i];
+
+// 		for (var key in source) {
+// 			if (hasOwnProperty$1.call(source, key)) {
+// 				target[key] = source[key];
+// 			}
+// 		}
+// 	}
+
+// 	return target;
+// }
+
+// const xtend = /*@__PURE__*/ getDefaultExportFromCjs(extend);
+export class CustomDrawControl extends MapboxDraw {}
