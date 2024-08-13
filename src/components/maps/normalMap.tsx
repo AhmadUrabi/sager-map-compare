@@ -14,6 +14,8 @@ import {
 	layerLengthStyle,
 	layerStyle,
 	MAPBOX_TOKEN,
+	styleList,
+	styles,
 } from "../../constants";
 import DrawControl, { drawRef } from "../drawControls";
 
@@ -29,26 +31,16 @@ export default function NormalMap() {
 	console.log("rerender");
 	// featureData contains the data of all of the features, with the key being the feature id
 	// This is to optimize search time in functions
-	const [featureData, setFeatureData] = useState<FeatureData>({});
-	const featureDataRef = useRef(featureData);
 
 	// areaOnHover is a boolean that toggles the mouse move event listener
 	const [areaOnHover, setAreaOnHover] = useState(true);
 	const areaOnHoverRef = useRef(areaOnHover);
 
 	// currentHover checks if the mouse is currently hovering over a feature, to prevent setting the geojson on every mouse move event
-	const [currentHover, setCurrentHover] = useState(false);
+	const [currentHover, setCurrentHover] = useState<string | null>(null);
+	const currentHoverRef = useRef(currentHover);
 
 	// geojson contains the feature(s) that are currently rendered on map
-	const [geojson, setGeoJson] = useState<FeatureCollection>({
-		type: "FeatureCollection",
-		features: [],
-	});
-
-	useEffect(() => {
-		console.log(geojson);
-	}, [geojson]);
-
 	const [lengthSource, setLengthSource] = useState<Feature | null>(null);
 	const [lengthVisible, setLengthVisible] = useState(false);
 
@@ -59,12 +51,12 @@ export default function NormalMap() {
 
 	// Effects to update refs for each state object, to use inside closures with the latest value
 	useEffect(() => {
-		featureDataRef.current = featureData;
-	}, [featureData]);
-
-	useEffect(() => {
 		areaOnHoverRef.current = areaOnHover;
 	}, [areaOnHover]);
+
+	useEffect(() => {
+		currentHoverRef.current = currentHover;
+	}, [currentHover]);
 
 	const modes = {
 		...getDrawModes(),
@@ -86,131 +78,66 @@ export default function NormalMap() {
 		},
 	};
 
-	// Update the center of the polygon on move
+	// Update the area of the polygon on move
 	const onUpdate = (e: any) => {
-		const { area, center } = calculateAreaAndCenter(e.features[0]);
-		const id = e.features[0].id;
-		const newData = { ...featureDataRef.current };
-		newData[id].geometry.coordinates = [center[0], center[1]];
-		newData[id].properties.description =
-			`Area: ${new Intl.NumberFormat().format(area)} m²`;
-		setFeatureData(newData);
+		const { area } = calculateAreaAndCenter(e.features[0]);
+		drawRef?.setFeatureProperty(
+			e.features[0].id,
+			"description",
+			`Area: ${new Intl.NumberFormat().format(area)} m²`,
+		);
 	};
 
-	const onDelete = (e: any) => {
-		const newData = { ...featureDataRef.current };
-		delete newData[e.features[0].id];
-		setFeatureData(newData);
-		// TODO: check geojson and remove the feature from it
-	};
+	const onDelete = (_e: any) => {};
 
-	// Calculate the area and center on create, and append them to featureData
 	const onCreate = (e: any) => {
 		if (e.features[0].geometry.type === "LineString") return;
-		const { area, center } = calculateAreaAndCenter(e.features[0]);
 
-		const id = e.features[0].id;
+		const { area } = calculateAreaAndCenter(e.features[0]);
 
-		const newData = {
-			...featureDataRef.current,
-			[id]: {
-				type: "Feature",
-				id: id,
-				properties: {
-					description: `Area: ${new Intl.NumberFormat().format(area)} m²`,
-				},
-				geometry: {
-					type: "Point",
-					coordinates: [center[0], center[1]],
-				},
-			},
-		};
-
-		setFeatureData(newData);
-		// setGeoJson((old) => {
-		// 	return {
-		// 		type: "FeatureCollection",
-		// 		features: [
-		// 			...old.features,
-		// 			{
-		// 				type: "Feature",
-		// 				id: id,
-		// 				properties: {
-		// 					description: `Area: ${new Intl.NumberFormat().format(area)} m²`,
-		// 				},
-		// 				geometry: {
-		// 					type: "Point",
-		// 					coordinates: [center[0], center[1]],
-		// 				},
-		// 			},
-		// 		],
-		// 	};
-		// });
+		drawRef?.setFeatureProperty(
+			e.features[0].id,
+			"description",
+			`Area: ${new Intl.NumberFormat().format(area)} m²`,
+		);
+		drawRef?.setFeatureProperty(e.features[0].id, "text_visibility", 0);
 	};
 
-	// TODO: redo this function
 	const toggleAreaOnHover = () => {
-		switch (areaOnHover) {
-			case true: {
-				if (mapRef.current) {
-					console.log("Removing event listener");
-					mapRef.current.off("mousemove", onMouseMoveHandle);
-				}
-				const featuresArray = Object.keys(featureDataRef.current).map((key) => {
-					return featureDataRef.current[key];
-				});
-				setGeoJson({
-					type: "FeatureCollection",
-					features: featuresArray as Feature[],
-				});
-				break;
-			}
-			case false:
-				if (mapRef.current) {
-					console.log("Adding event listener");
-					mapRef.current.on("mousemove", onMouseMoveHandle);
-				}
-				setGeoJson({
-					type: "FeatureCollection",
-					features: [],
-				});
-				break;
+		if (areaOnHoverRef.current) {
+			mapRef.current?.off("mousemove", onMouseMoveHandle);
+			// biome-ignore lint/complexity/noForEach: <explanation>
+			drawRef?.getAll().features.forEach((feature) => {
+				drawRef?.setFeatureProperty(feature.id as string, "text_visibility", 1);
+			});
+			setCurrentHover(null);
+		} else {
+			mapRef.current?.on("mousemove", onMouseMoveHandle);
+			// biome-ignore lint/complexity/noForEach: <explanation>
+			drawRef?.getAll().features.forEach((feature) => {
+				drawRef?.setFeatureProperty(feature.id as string, "text_visibility", 0);
+			});
+			setAreaOnHover(true);
 		}
-		setAreaOnHover(!areaOnHover);
 	};
 
-	// Main event handler for mouse move events
-	// Still needs some optimization (Flag Checks, find functions) and testing
-	const onMouseMoveHandle = useCallback(
-		(e: MapMouseEvent) => {
-			if (!areaOnHoverRef.current) return;
-
-			// @ts-ignore - featureTarget is not in the types
-			const el = e.featureTarget;
-			console.log(el);
-			if (el) {
-				// Return if the mouse is already hovering over a feature
-				if (currentHover) return;
-				setCurrentHover(true);
-
-				// Fetch the matching feature from the featureData
-				const feature = featureDataRef.current[el.properties.id];
-				if (!feature) return;
-				setGeoJson({
-					type: "FeatureCollection",
-					features: [feature as Feature],
-				});
-			} else {
-				setCurrentHover(false);
-				if (geojson.features.length === 0) return;
-				setGeoJson({
-					type: "FeatureCollection",
-					features: [],
-				});
-			}
-		},
-		[currentHover, geojson.features.length],
-	);
+	const onMouseMoveHandle = useCallback((e: MapMouseEvent) => {
+		if (!areaOnHoverRef.current) return;
+		const el = drawRef?.getFeatureIdsAt(e.point)[0];
+		if (el) {
+			// if (currentHover) return;
+			// setCurrentHover(el);
+			drawRef?.setFeatureProperty(el, "text_visibility", 1);
+		} else {
+			// if (currentHoverRef.current) {
+			// biome-ignore lint/complexity/noForEach: <explanation>
+			drawRef?.getAll().features.forEach((feature) => {
+				drawRef?.setFeatureProperty(feature.id as string, "text_visibility", 0);
+			});
+			// 	setCurrentHover(null);
+			// }
+		}
+	}, []);
 
 	const [mapReady, setMapReady] = useState(false);
 
@@ -230,7 +157,7 @@ export default function NormalMap() {
 			</div>
 			<GeoMap
 				ref={mapRef}
-				fadeDuration={150}
+				fadeDuration={100}
 				mapboxAccessToken={MAPBOX_TOKEN}
 				initialViewState={initialViewState}
 				onLoad={mapLoadHandler}
@@ -246,6 +173,7 @@ export default function NormalMap() {
 					onCreate={onCreate}
 					onUpdate={onUpdate}
 					onDelete={onDelete}
+					styles={styleList}
 				/>
 				{mapReady && (
 					<MapControls
@@ -254,32 +182,17 @@ export default function NormalMap() {
 						areaOnHover={areaOnHover}
 					/>
 				)}
-				{/*<GeoJSONSource geojson={geojson} /> */}
-				{mapRef.current && (
-					<Source id="my-data" type="geojson" data={geojson}>
-						<Layer {...layerStyle} />
-					</Source>
-				)}
-				{lengthVisible && <LengthSource lengthSource={lengthSource} />}
 			</GeoMap>
 		</>
 	);
 }
 
-export function GeoJSONSource({ geojson }: { geojson: FeatureCollection }) {
-	return (
-		<Source id="my-data" type="geojson" data={geojson}>
-			<Layer {...layerStyle} />
-		</Source>
-	);
-}
-
-export function LengthSource({
-	lengthSource,
-}: { lengthSource: Feature | null }) {
-	return (
-		<Source id="lengthSource" type="geojson" data={lengthSource}>
-			<Layer {...layerLengthStyle} />
-		</Source>
-	);
-}
+// export function LengthSource({
+// 	lengthSource,
+// }: { lengthSource: Feature | null }) {
+// 	return (
+// 		<Source id="lengthSource" type="geojson" data={lengthSource}>
+// 			<Layer {...layerLengthStyle} />
+// 		</Source>
+// 	);
+// }

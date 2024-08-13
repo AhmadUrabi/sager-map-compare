@@ -4,6 +4,7 @@ export default interface FeatureData {
 		id: string;
 		properties: {
 			description: string;
+			text_visibility: boolean;
 		};
 		geometry: {
 			type: string;
